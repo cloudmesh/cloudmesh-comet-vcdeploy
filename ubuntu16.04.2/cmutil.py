@@ -159,7 +159,7 @@ def setkey():
             outfile.write(line)
 
 # call after compute nodes up and running
-def setknownhosts(nodesfile=None, vc=None):
+def settrust(nodesfile=None, vc=None):
     if vc:
         if not nodesfile:
             nodesfile = "vcnodes_{}.txt".format(vc)
@@ -169,6 +169,7 @@ def setknownhosts(nodesfile=None, vc=None):
             return
     ips = []
     iphosts = '\n'
+    os.system("ssh-keyscan -H {} >> {} 2>/dev/null".format(vc, "{}/.ssh/known_hosts".format(get_sudouser_home())))
     with open(nodesfile) as nodes:
         lines = nodes.readlines()
         for aline in lines:
@@ -181,9 +182,9 @@ def setknownhosts(nodesfile=None, vc=None):
             os.system("ssh-keyscan -H {} >> {} 2>/dev/null".format(ip, "{}/.ssh/known_hosts".format(get_sudouser_home())))
             os.system("ssh-keyscan -H {} >> {} 2>/dev/null".format(name, "{}/.ssh/known_hosts".format(get_sudouser_home())))
     for ip in ips:
-        os.system("scp {}/.ssh/known_hosts root@{}:/root/.ssh/".format(get_sudouser_home(), ip))
-        os.system("scp {}/.ssh/id_rsa root@{}:/root/.ssh/".format(get_sudouser_home(), ip))
-        os.system("echo '{}' | ssh root@{} 'cat >> /etc/hosts'".format(iphosts, ip))
+        os.system("scp {}/.ssh/known_hosts {}:/{}/.ssh/".format(get_sudouser_home(), ip, get_sudouser_home()))
+        os.system("scp {}/.ssh/id_rsa {}:{}/.ssh/".format(get_sudouser_home(), ip, get_sudouser_home()))
+        #os.system("echo '{}' | ssh {} 'cat >> /etc/hosts'".format(iphosts, ip))
 
 # sudo cmutil.py still gets the unprivileged user directory, which breaks
 # ssh key location
@@ -197,19 +198,19 @@ def get_sudouser_home():
 
 def usage():
     usagestr = "Usage:\n"\
-               "./cmutil.py nodesfile\n"\
-               "./cmutil.py pxefile vc2\n"\
-               "./cmutil.py setkey\n"\
-               "./cmutil.py setpassword\n"\
                "./cmutil.py setboot vc2 node1 net=false\n"\
                "./cmutil.py setboot vc2 node1 net=true\n"\
-               "./cmutil.py addhosts vc2\n"\
-               "./cmutil.py setknownhosts vc2\n"
+               "./cmutil.py settrust vc2\n"
+               #"./cmutil.py addhosts vc2\n"\
+               #"./cmutil.py nodesfile\n"\
+               #"./cmutil.py pxefile vc2\n"\
+               #"./cmutil.py setkey\n"\
+               #"./cmutil.py setpassword\n"\
     print (usagestr)
 
 if __name__ == "__main__":
     argv = sys.argv[1:]
-    commands = ['nodesfile', 'pxefile', 'setkey', 'setpassword', 'setboot', 'addhosts', 'setknownhosts']
+    commands = ['nodesfile', 'pxefile', 'setkey', 'setpassword', 'setboot', 'addhosts', 'settrust']
     if len(argv) >= 1:
         cmd = argv[0]
         cluster = ''
@@ -238,8 +239,8 @@ if __name__ == "__main__":
                     setboot(node, vc=cluster, net=netboot)
             elif cmd == 'addhosts':
                 addhosts(vc=cluster)
-            elif cmd == 'setknownhosts':
-                setknownhosts(vc=cluster)
+            elif cmd == 'settrust':
+                settrust(vc=cluster)
             else:
                 usage()
         else:

@@ -54,6 +54,12 @@
       - inetutils-inetd
       - nfs-kernel-server
       - iptables-persistent
+      - build-essential
+      - python-dev
+      - python-minimal
+      - libffi-dev
+      - libssl-dev
+      - virtualenv
     become: true
 
   - name: Check if files had been copied over - dir exists?
@@ -328,4 +334,16 @@
       src: compute_postscript.j2
       dest: /var/www/html/postscript.sh
     ignore_errors: yes
+    become: true
+
+  - name: disable password login via ssh
+    lineinfile:
+      dest: /etc/ssh/sshd_config
+      line: 'PasswordAuthentication no'
+    become: true
+
+  - name: Restarting sshd to disable password login
+    service:
+      name: "sshd"
+      state: restarted
     become: true
