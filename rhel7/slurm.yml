@@ -1,0 +1,148 @@
+---
+# Build and deploy slurm
+#
+# This was based on a deployment of Slurm 14.11.7 in FutureSystems,
+# which is a rather old version at this time. Newer version should be
+# similar process but may need some changes.
+#
+# One node (typically the login node) should be designated the
+# "build" host. Slurm will be compiled and installed there, and then
+# the installed files will be deployed to the compute nodes.
+#
+# Playbook should be run with -b (--become) option.
+#
+
+
+# Install prerequisite software and build slurm
+- hosts:
+    - slurm_build
+  tasks:
+    - name: install slurm prereqs
+      yum: name={{ item }} state=present
+      with_items:
+        - "@Development Tools"
+        - munge-devel
+        - ncurses-devel
+        - gtk2-devel
+        - perl-devel
+        - perl-CPAN
+
+    - name: copy slurm source
+      unarchive: copy=yes src=slurm-14.11.7.tar.bz2 dest=/opt/ creates=/opt/slurm-14.11.7 owner=root group=root
+
+    - name: configure slurm source
+      command: /opt/slurm-14.11.7/configure --prefix=/opt/slurm --enable-pam --with-pam_dir=/lib64/security chdir=/opt/slurm-14.11.7 creates=config.log
+
+    - name: compile slurm source
+      command: make chdir=/opt/slurm-14.11.7 creates=src/srun/srun
+
+    - name: install slurm
+      command: make install chdir=/opt/slurm-14.11.7 creates=/opt/slurm/bin/srun
+
+    - name: make directory for slurm.conf
+      file: path=/opt/slurm/etc state=directory owner=root group=root mode=0755
+
+    - name: copy slurm config
+      template: src=slurm.conf.j2 dest=/opt/slurm/etc/slurm.conf owner=root group=root mode=0644
+
+    - name: create installed slurm archive
+      command: tar czf slurm-14.11.7-install.tar.gz slurm chdir=/opt creates=slurm-14.11.7-install.tar.gz
+
+    - name: fetch slurm installation
+      fetch: src=/opt/slurm-14.11.7-install.tar.gz dest=files/ flat=true
+
+
+# Deploy common slurm prerequisites and install slurm
+- hosts:
+    - slurm
+  tasks:
+    - name: install munge
+      yum: name={{ item }} state=present
+      with_items:
+        - munge
+        - hwloc
+
+    - name: copy munge key
+      copy: src=munge.key dest=/etc/munge/munge.key owner=munge group=munge mode=400
+
+    - name: start munge
+      service: name=munge state=started enabled=yes
+
+    - name: copy slurm installation
+      copy: src=slurm-14.11.7-install.tar.gz dest=/opt/slurm-14.11.7-install.tar.gz
+
+    - name: unpack slurm installation
+      command: tar xzf slurm-14.11.7-install.tar.gz chdir=/opt creates=/opt/slurm/etc/slurm.conf
+
+    - name: create slurm group
+      group: name=slurm gid=105 state=present
+
+    - name: create slurm user
+      user: name=slurm uid=105 group=slurm createhome=no home=/opt/slurm shell=/bin/nologin state=present
+
+    - name: create slurm directories
+      file: path={{ item }} state=directory owner=slurm mode=0755
+      with_items:
+        - /var/spool/slurmd
+        - /var/log/slurm
+        - /opt/local/slurm
+
+    - name: copy profile.d script for slurm
+      copy: src=slurm.sh dest=/etc/profile.d/slurm.sh mode=0755 owner=root group=root
+
+    - name: update slurm manpath
+      lineinfile: dest=/etc/man_db.conf line="{{ item }}" state=present insertafter="^MANPATH_MAP\s*/opt/sbin\s*/opt/man"
+      with_items:
+        - "MANPATH_MAP	/opt/slurm/sbin		/opt/slurm/share/man"
+        - "MANPATH_MAP	/opt/slurm/bin		/opt/slurm/share/man"
+
+
+# Configuration for Slurm control daemon
+- hosts:
+    - slurmctld
+  tasks:
+    - name: copy environment file for slurmctld
+      copy: src=sysconfig.slurmctld dest=/etc/sysconfig/slurmctld mode=0644 owner=root group=root
+      register: slurmctld_config
+
+    - name: copy service script for slurmctld
+      copy: src=slurmctld.service dest=/etc/systemd/system/slurmctld.service mode=0644 owner=root group=root
+      register: slurmctld_service
+
+    - name: reload systemctl daemon
+      command: systemctl daemon-reload
+      when: slurmctld_service.changed
+
+    - name: configure slurmctld daemon
+      service: name=slurmctld enabled=yes
+
+    - name: restart slurmctld daemon
+      service: name=slurmctld state=restarted
+      when: slurmctld_config.changed
+
+
+# Configuration for Slurm compute nodes
+- hosts:
+    - slurmd
+  tasks:
+    - name: copy environment file for slurmd
+      copy: src=sysconfig.slurm dest=/etc/sysconfig/slurmd mode=0644 owner=root group=root
+      register: slurmd_config
+
+    - name: copy service script for slurmd
+      copy: src=slurmd.service dest=/etc/systemd/system/slurmd.service mode=0644 owner=root group=root
+      register: slurmd_service
+
+    - name: reload systemctl daemon
+      command: systemctl daemon-reload
+      when: slurmd_service.changed
+
+    - name: copy epilog
+      copy: src=epilog dest=/opt/local/slurm/epilog mode=0700 owner=root group=root
+
+    - name: configure slurmd daemon
+      service: name=slurmd enabled=yes
+
+    - name: restart slurmd daemon
+      service: name=slurmd state=restarted
+      when: slurmd_config.changed

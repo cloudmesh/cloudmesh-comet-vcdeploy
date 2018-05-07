@@ -1,0 +1,38 @@
+# Sample ansible inventory file for slurm cluster. Review for changes
+# before using.
+
+# Node where we will build slurm source
+[slurm_build]
+login
+
+# Nodes where we will run slurmd
+[slurmd]
+compute[1:n]
+
+# Node where we will run slurm controller
+[slurmctld]
+login
+
+# All slurm nodes
+[slurm:children]
+slurmd
+slurmctld
+
+# Variables -- these go into generated slurm.conf
+# Values are examples only -- fill these in!
+#
+# This example assumes all nodes are the same; if there are different
+# node configurations in the cluster, slurm.conf will need to have a
+# "NodeName" line for each unique combination.
+#
+# Generally cpus_per_node = sockets_per_node * cores_per_socket
+#
+[slurm:vars]
+slurm_controller=login
+slurm_cluster_name=mycluster
+slurm_compute_nodes=compute[1:n]
+slurm_cpus_per_node=8
+slurm_ram_mb_per_node=8000
+slurm_sockets_per_node=2
+slurm_cores_per_socket=4
+slurm_threads_per_core=1

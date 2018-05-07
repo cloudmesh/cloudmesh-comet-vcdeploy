@@ -1,0 +1,6 @@
+#!/bin/bash
+#
+# Simple epilog for juliet nodes:
+#  - cleans scratch space
+#
+#cd /hddscratch && find . -mindepth 1 -maxdepth 1 -print0 | xargs -0 rm -rf
