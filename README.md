@@ -1,2 +1,2 @@
-# cloudmesh.comet.vcdeploy
+# cloudmesh-comet-vcdeploy
 Comet VC deployment templates, scripts, and examples
